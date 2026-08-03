@@ -1,0 +1,18 @@
+{
+  "name": "vnkr-trade",
+  "version": "1.0.0",
+  "private": true,
+  "author": "NGUYEN THI THU HUONG",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev:backend":  "pnpm --filter backend run start:dev",
+    "dev:frontend": "pnpm --filter frontend run dev",
+    "build:backend":  "pnpm --filter backend run build",
+    "build:frontend": "pnpm --filter frontend run build",
+    "lint": "pnpm -r run lint"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}
