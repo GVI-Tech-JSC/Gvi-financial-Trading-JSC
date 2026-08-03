@@ -1,0 +1,46 @@
+{
+  "common": {
+    "login":     "Login",
+    "register":  "Register",
+    "logout":    "Logout",
+    "dashboard": "Dashboard",
+    "wallet":    "Wallet",
+    "trade":     "Trade",
+    "deposit":   "Deposit",
+    "withdraw":  "Withdraw",
+    "history":   "History",
+    "settings":  "Settings",
+    "profile":   "Profile",
+    "kyc":       "KYC Verification",
+    "support":   "Support",
+    "loading":   "Loading...",
+    "save":      "Save",
+    "cancel":    "Cancel",
+    "confirm":   "Confirm",
+    "search":    "Search"
+  },
+  "trade": {
+    "spot":    "Spot Trading",
+    "futures": "Futures",
+    "binary":  "Binary Options",
+    "dex":     "DEX",
+    "p2p":     "P2P Trading",
+    "buy":     "Buy",
+    "sell":    "Sell",
+    "price":   "Price",
+    "amount":  "Amount",
+    "total":   "Total",
+    "fee":     "Fee",
+    "market":  "Market",
+    "limit":   "Limit"
+  },
+  "auth": {
+    "email":           "Email",
+    "password":        "Password",
+    "forgotPassword":  "Forgot password?",
+    "loginTitle":      "Login to your account",
+    "registerTitle":   "Create a new account",
+    "twoFactor":       "Two-Factor Authentication",
+    "enterOtp":        "Enter OTP code"
+  }
+}

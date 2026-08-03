@@ -1,0 +1,46 @@
+{
+  "common": {
+    "login":     "Đăng nhập",
+    "register":  "Đăng ký",
+    "logout":    "Đăng xuất",
+    "dashboard": "Bảng điều khiển",
+    "wallet":    "Ví",
+    "trade":     "Giao dịch",
+    "deposit":   "Nạp tiền",
+    "withdraw":  "Rút tiền",
+    "history":   "Lịch sử",
+    "settings":  "Cài đặt",
+    "profile":   "Hồ sơ",
+    "kyc":       "Xác minh danh tính",
+    "support":   "Hỗ trợ",
+    "loading":   "Đang tải...",
+    "save":      "Lưu",
+    "cancel":    "Hủy",
+    "confirm":   "Xác nhận",
+    "search":    "Tìm kiếm"
+  },
+  "trade": {
+    "spot":    "Giao dịch Spot",
+    "futures": "Hợp đồng tương lai",
+    "binary":  "Quyền chọn nhị phân",
+    "dex":     "DEX",
+    "p2p":     "Giao dịch P2P",
+    "buy":     "Mua",
+    "sell":    "Bán",
+    "price":   "Giá",
+    "amount":  "Số lượng",
+    "total":   "Tổng",
+    "fee":     "Phí",
+    "market":  "Thị trường",
+    "limit":   "Giới hạn"
+  },
+  "auth": {
+    "email":           "Email",
+    "password":        "Mật khẩu",
+    "forgotPassword":  "Quên mật khẩu?",
+    "loginTitle":      "Đăng nhập tài khoản",
+    "registerTitle":   "Tạo tài khoản mới",
+    "twoFactor":       "Xác thực 2 bước",
+    "enterOtp":        "Nhập mã OTP"
+  }
+}
