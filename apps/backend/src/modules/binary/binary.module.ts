@@ -1,9 +1,12 @@
-import { Module } from "@nestjs/common";
-import { BinaryService }    from "./binary.service";
-import { BinaryController } from "./binary.controller";
+import { Module }          from "@nestjs/common";
+import { BinaryService }   from "./binary.service";
+import { BinaryController }from "./binary.controller";
+import { BinaryEngine }    from "./engines/binary.engine";
+import { WalletModule }    from "../wallet/wallet.module";
 
 @Module({
-  providers:   [BinaryService],
+  imports:     [WalletModule],
+  providers:   [BinaryService, BinaryEngine],
   controllers: [BinaryController],
   exports:     [BinaryService],
 })
