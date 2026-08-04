@@ -1,67 +1,33 @@
-/**
- * VNKR Trade — Ecosystem Controller
- * Author: NGUYEN THI THU HUONG | GVI Tech JSC
- * Routes bám sát API_ROUTE_MAP §6 ECOSYSTEM
- */
-import {
-  Controller, Get, Post, Body, Param, Query, UseGuards,
-} from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger";
-import { EcosystemService }   from "./ecosystem.service";
-import { ImportTokenDto, CreateMasterWalletDto, EcoWithdrawDto } from "./dto/ecosystem.dto";
-import { JwtAuthGuard }       from "../../common/guards/jwt-auth.guard";
-import { RolesGuard }         from "../../common/guards/roles.guard";
-import { Roles }              from "../../common/decorators/roles.decorator";
-import { CurrentUser }        from "../../common/decorators/current-user.decorator";
+import { Controller, Get, Post, Param, Body, Query, UseGuards } from "@nestjs/common";
+import { JwtAuthGuard }    from "../../common/guards/jwt-auth.guard";
+import { RolesGuard }      from "../../common/guards/roles.guard";
+import { Roles }           from "../../common/decorators/roles.decorator";
+import { CurrentUser }     from "../../common/decorators/current-user.decorator";
+import { EcosystemService } from "./ecosystem.service";
 
-@ApiTags("ecosystem")
-@Controller("api/(ext)/ecosystem")
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@Controller("(ext)/ecosystem")
 export class EcosystemController {
   constructor(private ecoSvc: EcosystemService) {}
 
-  @Get("market")
-  @ApiOperation({ summary: "Thị trường DEX (blockchains + tokens)" })
-  getMarkets() { return this.ecoSvc.getMarkets(); }
+  @Get("blockchains") getBlockchains()                   { return this.ecoSvc.getBlockchains(); }
+  @Get("tokens")      getTokens(@Query("chain") c?: string) { return this.ecoSvc.getTokens(c); }
+  @Get("fee/:network") getFee(@Param("network") n: string) { return this.ecoSvc.getNetworkFee(n); }
 
-  @Get("token")
-  @ApiOperation({ summary: "Danh sách token on-chain" })
-  getTokens() { return this.ecoSvc.getTokens(); }
-
+  @UseGuards(JwtAuthGuard)
   @Get("wallet")
-  @ApiOperation({ summary: "Ví blockchain custodial" })
-  @ApiQuery({ name: "chain", required: false })
-  getUserWallet(@CurrentUser() u: any, @Query("chain") chain?: string) {
-    return this.ecoSvc.getUserWallet(u.sub, chain);
+  getWallet(@CurrentUser() u: any) { return this.ecoSvc.getUserWallet(u.sub); }
+
+  @UseGuards(JwtAuthGuard)
+  @Get("deposit-address")
+  getDepositAddress(@CurrentUser() u: any, @Query("currency") currency: string, @Query("network") network: string) {
+    return this.ecoSvc.getDepositAddress(u.sub, currency, network);
   }
 
-  @Get("deposit")
-  @ApiOperation({ summary: "Lịch sử nạp on-chain" })
-  getDeposits(@CurrentUser() u: any) { return this.ecoSvc.getDeposits(u.sub); }
+  @UseGuards(JwtAuthGuard, RolesGuard) @Roles("admin")
+  @Post("blockchains")
+  createBlockchain(@Body() dto: any) { return this.ecoSvc.createBlockchain(dto); }
 
-  // ── Admin ─────────────────────────────────────────────────
-  @Post("admin/wallet/master")
-  @UseGuards(RolesGuard) @Roles("admin","superadmin")
-  @ApiOperation({ summary: "Tạo master wallet" })
-  createMasterWallet(@Body() dto: CreateMasterWalletDto) {
-    return this.ecoSvc.createMasterWallet(dto);
-  }
-
-  @Get("admin/wallet/master/:chain")
-  @UseGuards(RolesGuard) @Roles("admin","superadmin")
-  @ApiOperation({ summary: "Xem master wallet" })
-  getMasterWallet(@Param("chain") chain: string) {
-    return this.ecoSvc.getMasterWallet(chain);
-  }
-
-  @Post("admin/token/import")
-  @UseGuards(RolesGuard) @Roles("admin","superadmin")
-  @ApiOperation({ summary: "Import token on-chain" })
-  importToken(@Body() dto: ImportTokenDto) { return this.ecoSvc.importToken(dto); }
-
-  @Post("admin/deposit/:id/confirm")
-  @UseGuards(RolesGuard) @Roles("admin","superadmin")
-  @ApiOperation({ summary: "Xác nhận deposit on-chain" })
-  confirmDeposit(@Param("id") id: string) { return this.ecoSvc.confirmDeposit(id); }
+  @UseGuards(JwtAuthGuard, RolesGuard) @Roles("admin")
+  @Post("tokens")
+  createToken(@Body() dto: any) { return this.ecoSvc.createToken(dto); }
 }

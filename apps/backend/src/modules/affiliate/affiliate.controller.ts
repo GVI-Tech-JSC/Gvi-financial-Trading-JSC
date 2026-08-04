@@ -2,75 +2,37 @@
  * VNKR Trade — Affiliate Controller
  * Author: NGUYEN THI THU HUONG | GVI Tech JSC
  */
-import {
-  Controller, Get, Post, Body, Query, Param,
-  UseGuards, HttpCode, HttpStatus,
-} from "@nestjs/common";
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from "@nestjs/swagger";
-import { AffiliateService } from "./affiliate.service";
-import { CreateTierDto, ValidateCodeDto } from "./dto/affiliate.dto";
-import { JwtAuthGuard }     from "../../common/guards/jwt-auth.guard";
-import { RolesGuard }       from "../../common/guards/roles.guard";
-import { Roles }            from "../../common/decorators/roles.decorator";
-import { CurrentUser }      from "../../common/decorators/current-user.decorator";
+import { Controller, Get, Post, Body, Query, UseGuards, DefaultValuePipe, ParseIntPipe } from "@nestjs/common";
+import { JwtAuthGuard }    from "../../common/guards/jwt-auth.guard";
+import { RolesGuard }      from "../../common/guards/roles.guard";
+import { Roles }           from "../../common/decorators/roles.decorator";
+import { CurrentUser }     from "../../common/decorators/current-user.decorator";
+import { AffiliateService }from "./affiliate.service";
 
-@ApiTags("affiliate")
-@Controller("api")
+@Controller("affiliate")
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
 export class AffiliateController {
   constructor(private affiliateSvc: AffiliateService) {}
 
-  @Get("(ext)/affiliate")
-  @ApiOperation({ summary: "Thông tin affiliate" })
-  getInfo(@CurrentUser() u: any) { return this.affiliateSvc.getAffiliateInfo(u.sub); }
+  @Get("info")        getInfo(@CurrentUser() u: any)    { return this.affiliateSvc.getAffiliateInfo(u.sub); }
+  @Get("tree")        getTree(@CurrentUser() u: any)    { return this.affiliateSvc.getReferralTree(u.sub); }
+  @Get("leaderboard") getLeaderboard()                  { return this.affiliateSvc.getLeaderboard(); }
 
-  @Get("(ext)/affiliate/stats")
-  @ApiOperation({ summary: "Thống kê affiliate" })
-  getStats(@CurrentUser() u: any) { return this.affiliateSvc.getStats(u.sub); }
-
-  @Get("(ext)/affiliate/referral")
-  @ApiOperation({ summary: "Danh sách referral" })
-  getReferrals(@CurrentUser() u: any) { return this.affiliateSvc.getAffiliateInfo(u.sub); }
-
-  @Get("(ext)/affiliate/referral/node")
-  @ApiOperation({ summary: "Cây referral" })
-  @ApiQuery({ name: "depth", required: false })
-  getTree(@CurrentUser() u: any, @Query("depth") depth?: number) {
-    return this.affiliateSvc.getReferralTree(u.sub, depth ?? 3);
+  @Post("apply")
+  applyCode(@Body() body: { referralCode: string }, @CurrentUser() u: any) {
+    return this.affiliateSvc.applyReferralCode(u.sub, body.referralCode);
   }
 
-  @Get("(ext)/affiliate/condition")
-  @ApiOperation({ summary: "Commission tiers" })
-  getTiers() { return this.affiliateSvc.getTiers(); }
+  @Get("stats")
+  getStats(@CurrentUser() u: any) { return this.affiliateSvc.getAffiliateInfo(u.sub); }
 
-  @Post("referral/validate")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Kiểm tra referral code" })
-  validateCode(@Body() dto: ValidateCodeDto) {
-    return this.affiliateSvc.validateCode(dto.code);
-  }
-
-  @Post("referral/apply")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Áp dụng referral code khi đăng ký" })
-  applyCode(@CurrentUser() u: any, @Body("code") code: string) {
-    return this.affiliateSvc.applyReferralCode(u.sub, code);
-  }
-
-  // ── Admin ──────────────────────────────────────────────────
-  @Get("(ext)/admin/affiliate/referral")
-  @UseGuards(RolesGuard) @Roles("admin","superadmin")
-  @ApiOperation({ summary: "Tất cả referrals (admin)" })
+  @UseGuards(RolesGuard)
+  @Roles("admin")
+  @Get("admin/referrals")
   adminGetReferrals(
-    @Query("page") page?: number,
-    @Query("limit") limit?: number,
-  ) { return this.affiliateSvc.adminGetReferrals({ page, limit }); }
-
-  @Post("(ext)/admin/affiliate/condition")
-  @UseGuards(RolesGuard) @Roles("admin","superadmin")
-  @ApiOperation({ summary: "Tạo/cập nhật commission tier" })
-  createTier(@Body() dto: CreateTierDto) {
-    return this.affiliateSvc.createTier(dto);
+    @Query("page",  new DefaultValuePipe(1),  ParseIntPipe) page: number,
+    @Query("limit", new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.affiliateSvc.getLeaderboard(limit);
   }
 }

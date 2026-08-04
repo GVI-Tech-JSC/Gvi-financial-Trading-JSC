@@ -1,174 +1,53 @@
-/**
- * VNKR Trade — Futures Service
- * Author: NGUYEN THI THU HUONG | GVI Tech JSC
- */
-import { Injectable, BadRequestException, NotFoundException, Logger } from "@nestjs/common";
-import { PrismaService }      from "../../prisma/prisma.service";
-import { WalletService }      from "../wallet/wallet.service";
-import { LiquidationEngine }  from "./engines/liquidation.engine";
-import { FundingRateEngine }  from "./engines/funding-rate.engine";
-import { OpenPositionDto, ClosePositionDto, SetLeverageDto } from "./dto/futures.dto";
-import { Decimal }            from "@prisma/client/runtime/library";
+import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
+import { PrismaService } from "../../prisma/prisma.service";
+import { WalletService } from "../wallet/wallet.service";
+import { Decimal }       from "@prisma/client/runtime/library";
+import { OpenPositionDto, ClosePositionDto } from "./dto/futures.dto";
 
 @Injectable()
 export class FuturesService {
   private readonly logger = new Logger(FuturesService.name);
+  constructor(private prisma: PrismaService, private wallets: WalletService) {}
 
-  constructor(
-    private prisma:    PrismaService,
-    private wallets:   WalletService,
-    private funding:   FundingRateEngine,
-  ) {}
-
-  // ── Markets ─────────────────────────────────────────────────
-  async getMarkets() {
-    return this.prisma.futuresMarket.findMany({ where: { status: true } });
-  }
-
-  async getMarket(symbol: string) {
-    const m = await this.prisma.futuresMarket.findUnique({ where: { symbol } });
-    if (!m) throw new NotFoundException(`Market ${symbol} not found`);
-    return m;
-  }
-
-  async getFundingRate(symbol: string) {
-    return this.funding.getCurrentRate(symbol);
-  }
-
-  // ── Account / Positions ──────────────────────────────────────
-  async getAccount(userId: string) {
-    const wallet    = await this.wallets.getOrCreate(userId, "FUTURES", "USDT");
-    const positions = await this.prisma.futuresPosition.findMany({
-      where: { userId, status: "OPEN" },
-    });
-    const totalUpnl = positions.reduce((s, p) => s + Number(p.unrealizedPnl ?? 0), 0);
-    return {
-      balance:        Number(wallet.balance),
-      inOrder:        Number(wallet.inOrder),
-      unrealizedPnl:  totalUpnl,
-      equity:         Number(wallet.balance) + totalUpnl,
-      positions:      positions.length,
-    };
-  }
-
-  async getPositions(userId: string, status?: string) {
+  async getPositions(userId: string) {
     return this.prisma.futuresPosition.findMany({
-      where: { userId, ...(status ? { status: status as any } : { status: "OPEN" }) },
-      orderBy: { openedAt: "desc" },
+      where: { userId }, orderBy: { createdAt: "desc" }, take: 50,
     });
   }
 
-  async getPosition(userId: string, id: string) {
-    const p = await this.prisma.futuresPosition.findFirst({ where: { id, userId } });
-    if (!p) throw new NotFoundException("Position not found");
-    return p;
-  }
-
-  // ── Open Position ────────────────────────────────────────────
   async openPosition(userId: string, dto: OpenPositionDto) {
-    const market = await this.getMarket(dto.symbol);
-    if (dto.leverage > market.maxLeverage)
-      throw new BadRequestException(`Max leverage is ${market.maxLeverage}x`);
-
-    // Calculate required margin
-    const entryPrice   = dto.price ?? await this.getMockPrice(dto.symbol);
-    const posValue     = dto.size * entryPrice;
-    const margin       = posValue / dto.leverage;
-    const fee          = posValue * Number(market.takerFee);
-    const totalRequired = margin + fee;
-
-    await this.wallets.assertBalance(userId, "FUTURES", "USDT", totalRequired);
-    await this.wallets.lockFunds(userId, "FUTURES", "USDT", totalRequired);
-
-    const liqPrice = LiquidationEngine.calcLiquidationPrice(dto.side, entryPrice, dto.leverage);
-
-    const position = await this.prisma.futuresPosition.create({
-      data: {
-        userId,
-        symbol:           dto.symbol,
-        side:             dto.side,
-        status:           "OPEN",
-        leverage:         dto.leverage,
-        entryPrice:       new Decimal(entryPrice),
-        markPrice:        new Decimal(entryPrice),
-        size:             new Decimal(dto.size),
-        margin:           new Decimal(margin),
-        liquidationPrice: new Decimal(liqPrice),
-        unrealizedPnl:    new Decimal(0),
-      },
-    });
-
-    // Deduct fee immediately
-    await this.wallets.deductBalance(userId, "FUTURES", "USDT", fee);
-
-    this.logger.log(`Position opened: ${userId} ${dto.side} ${dto.size} ${dto.symbol} @ ${entryPrice}`);
-    return position;
-  }
-
-  // ── Close Position ────────────────────────────────────────────
-  async closePosition(userId: string, dto: ClosePositionDto) {
-    const pos = await this.getPosition(userId, dto.positionId);
-    if (pos.status !== "OPEN") throw new BadRequestException("Position is not open");
-
-    const closePrice   = await this.getMockPrice(pos.symbol);
-    const side         = pos.side as "LONG" | "SHORT";
-    const closeSize    = dto.size ?? Number(pos.size);
-    const realizedPnl  = LiquidationEngine.calcUnrealizedPnl(
-      side, Number(pos.entryPrice), closePrice, closeSize,
-    );
-
-    const isFull = closeSize >= Number(pos.size);
-
-    await this.prisma.$transaction(async (tx) => {
-      if (isFull) {
-        await tx.futuresPosition.update({
-          where: { id: pos.id },
-          data: {
-            status:      "CLOSED",
-            closePrice:  new Decimal(closePrice),
-            realizedPnl: new Decimal(realizedPnl),
-            closedAt:    new Date(),
-          },
-        });
-      } else {
-        const newSize   = Number(pos.size) - closeSize;
-        const newMargin = (Number(pos.margin) * newSize) / Number(pos.size);
-        await tx.futuresPosition.update({
-          where: { id: pos.id },
-          data: {
-            size:   new Decimal(newSize),
-            margin: new Decimal(newMargin),
-          },
-        });
-      }
-      // Unlock margin + credit PnL
-      const returnAmount = (Number(pos.margin) * closeSize / Number(pos.size)) + realizedPnl;
-      await tx.wallet.updateMany({
-        where: { userId, type: "FUTURES", currency: "USDT" },
-        data: {
-          balance:  { increment: Math.max(0, returnAmount) },
-          inOrder:  { decrement: Number(pos.margin) * closeSize / Number(pos.size) },
-        },
-      });
-    });
-
-    return { closed: true, realizedPnl, closePrice };
-  }
-
-  // ── Orders (futures) ──────────────────────────────────────────
-  async getOrders(userId: string) {
-    return this.prisma.futuresPosition.findMany({
-      where: { userId },
-      orderBy: { openedAt: "desc" },
-      take: 100,
+    if (dto.leverage < 1 || dto.leverage > 125) throw new BadRequestException("Leverage must be 1-125");
+    await this.wallets.assertBalance(userId, "FUTURES", "USDT", dto.margin);
+    const mockPrice   = this.getMockPrice(dto.symbol);
+    const size        = new Decimal(dto.margin).mul(dto.leverage);
+    const liqDelta    = new Decimal(dto.margin).div(size);
+    const liqPrice    = dto.side === "LONG"
+      ? new Decimal(mockPrice).mul(new Decimal(1).minus(liqDelta))
+      : new Decimal(mockPrice).mul(new Decimal(1).plus(liqDelta));
+    await this.wallets.lockFunds(userId, "FUTURES", "USDT", dto.margin);
+    return this.prisma.futuresPosition.create({
+      data: { userId, symbol: dto.symbol, side: dto.side as any, leverage: dto.leverage, margin: new Decimal(dto.margin), size, entryPrice: new Decimal(mockPrice), markPrice: new Decimal(mockPrice), liquidationPrice: liqPrice, status: "OPEN" },
     });
   }
 
-  private async getMockPrice(symbol: string): Promise<number> {
-    const prices: Record<string, number> = {
-      BTCUSDT: 65000, ETHUSDT: 3500, BNBUSDT: 600,
-      SOLUSDT: 150,   XRPUSDT: 0.6,  ADAUSDT: 0.45,
-    };
-    return prices[symbol] ?? 100;
+  async closePosition(userId: string, positionId: string, dto?: ClosePositionDto) {
+    const pos = await this.prisma.futuresPosition.findUnique({ where: { id: positionId } });
+    if (!pos || pos.userId !== userId) throw new NotFoundException("Position not found");
+    if (pos.status !== "OPEN") throw new BadRequestException("Position already closed");
+    const closePrice = this.getMockPrice(pos.symbol);
+    const priceDiff  = new Decimal(closePrice).minus(pos.entryPrice);
+    const pnl        = pos.side === "LONG" ? priceDiff.mul(pos.size).div(pos.entryPrice) : priceDiff.negated().mul(pos.size).div(pos.entryPrice);
+    const returnAmt  = new Decimal(pos.margin).plus(pnl);
+    await this.prisma.$transaction(async tx => {
+      await tx.futuresPosition.update({ where: { id: positionId }, data: { status: "CLOSED", realizedPnl: pnl, closedAt: new Date(), markPrice: new Decimal(closePrice) } });
+      await tx.wallet.updateMany({ where: { userId, type: "FUTURES", currency: "USDT" }, data: { balance: { increment: Number(returnAmt) }, lockedBalance: { decrement: Number(pos.margin) } } });
+      await tx.transaction.create({ data: { userId, type: "TRADE", status: "COMPLETED", currency: "USDT", amount: returnAmt, description: `Futures PnL ${pos.symbol} ${pos.side}` } });
+    });
+    return { closed: true, pnl: Number(pnl), returnAmount: Number(returnAmt) };
+  }
+
+  private getMockPrice(symbol: string): number {
+    const p: Record<string,number> = { "BTC/USDT":65000, "ETH/USDT":3500, "SOL/USDT":150, "BNB/USDT":600 };
+    return p[symbol] ?? 100;
   }
 }

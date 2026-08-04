@@ -1,22 +1,18 @@
-import { IsString, IsOptional, IsNumber, Min, IsInt } from "class-validator";
-import { ApiProperty } from "@nestjs/swagger";
+import { IsString, IsOptional, IsNumber, IsInt } from "class-validator";
 
-export class CreateMasterWalletDto {
-  @ApiProperty({ example: "ETH" }) @IsString() chain: string;
+export class CreateBlockchainDto {
+  @IsString() name: string;
+  @IsString() symbol: string;
+  @IsInt() @IsOptional() chainId?: number;
+  @IsString() @IsOptional() rpcUrl?: string;
+  @IsString() @IsOptional() explorerUrl?: string;
+  @IsString() nativeCoin: string;
 }
 
-export class EcoWithdrawDto {
-  @ApiProperty() @IsString()               currency:  string;
-  @ApiProperty() @IsString()               network:   string;
-  @ApiProperty() @IsString()               toAddress: string;
-  @ApiProperty() @IsNumber() @Min(0.000001) amount:   number;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() memo?: string;
-}
-
-export class ImportTokenDto {
-  @ApiProperty() @IsString() blockchainId:  string;
-  @ApiProperty() @IsString() symbol:        string;
-  @ApiProperty() @IsString() name:          string;
-  @ApiProperty() @IsString() contractAddr:  string;
-  @ApiProperty() @IsInt()    decimals:       number;
+export class CreateTokenDto {
+  @IsString() blockchainId: string;
+  @IsString() name: string;
+  @IsString() symbol: string;
+  @IsString() @IsOptional() contractAddress?: string;
+  @IsInt() @IsOptional() decimals?: number;
 }

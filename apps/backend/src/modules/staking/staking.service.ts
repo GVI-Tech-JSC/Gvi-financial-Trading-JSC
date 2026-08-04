@@ -1,171 +1,69 @@
-/**
- * VNKR Trade — Staking Service
- * Author: NGUYEN THI THU HUONG | GVI Tech JSC
- */
 import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
 import { PrismaService }  from "../../prisma/prisma.service";
 import { WalletService }  from "../wallet/wallet.service";
-import { RewardEngine }   from "./engines/reward.engine";
-import { StakeDto, UnstakeDto, CreatePoolDto } from "./dto/staking.dto";
 import { Decimal }        from "@prisma/client/runtime/library";
+import { StakeDto, CreatePoolDto } from "./dto/staking.dto";
 
 @Injectable()
 export class StakingService {
   private readonly logger = new Logger(StakingService.name);
+  constructor(private prisma: PrismaService, private wallets: WalletService) {}
 
-  constructor(
-    private prisma:   PrismaService,
-    private wallets:  WalletService,
-    private rewards:  RewardEngine,
-  ) {}
-
-  // ── Pools ─────────────────────────────────────────────────
   async getPools() {
-    return this.prisma.stakingPool.findMany({
-      where:   { status: "ACTIVE" },
-      orderBy: { apy: "desc" },
-    });
+    return this.prisma.stakingPool.findMany({ where: { status: "ACTIVE" }, orderBy: { apy: "desc" } });
   }
 
   async getPool(id: string) {
     const p = await this.prisma.stakingPool.findUnique({ where: { id } });
-    if (!p) throw new NotFoundException("Staking pool not found");
+    if (!p) throw new NotFoundException("Pool not found");
     return p;
   }
 
   async createPool(dto: CreatePoolDto) {
-    return this.prisma.stakingPool.create({
-      data: {
-        name:        dto.name,
-        currency:    dto.currency,
-        apy:         new Decimal(dto.apy),
-        minAmount:   new Decimal(dto.minAmount),
-        maxAmount:   dto.maxAmount ? new Decimal(dto.maxAmount) : null,
-        lockDays:    dto.lockDays ?? 0,
-        autoCompound:dto.autoCompound ?? false,
-        status:      "ACTIVE",
-      },
-    });
+    return this.prisma.stakingPool.create({ data: { ...dto } as any });
   }
 
-  // ── Stake ──────────────────────────────────────────────────
   async stake(userId: string, dto: StakeDto) {
     const pool = await this.getPool(dto.poolId);
-
-    if (dto.amount < Number(pool.minAmount))
-      throw new BadRequestException(`Minimum stake is ${pool.minAmount} ${pool.currency}`);
-    if (pool.maxAmount && dto.amount > Number(pool.maxAmount))
-      throw new BadRequestException(`Maximum stake is ${pool.maxAmount} ${pool.currency}`);
-
+    if (dto.amount < Number(pool.minAmount)) throw new BadRequestException(`Minimum stake: ${pool.minAmount} ${pool.currency}`);
     await this.wallets.assertBalance(userId, "SPOT", pool.currency, dto.amount);
-    await this.wallets.deductBalance(userId, "SPOT", pool.currency, dto.amount);
-
-    const endsAt = pool.lockDays > 0
-      ? new Date(Date.now() + pool.lockDays * 86400000)
-      : null;
-
-    const position = await this.prisma.stakingPosition.create({
-      data: {
-        userId,
-        poolId:      pool.id,
-        amount:      new Decimal(dto.amount),
-        earned:      new Decimal(0),
-        status:      "ACTIVE",
-        endsAt,
-      },
+    await this.wallets.lockFunds(userId, "SPOT", pool.currency, dto.amount);
+    const unlocksAt = new Date(Date.now() + pool.lockDays * 86_400_000);
+    const position  = await this.prisma.stakingPosition.create({
+      data: { userId, poolId: dto.poolId, amount: new Decimal(dto.amount), status: "ACTIVE", stakedAt: new Date(), unlocksAt },
     });
-
-    await this.prisma.transaction.create({
-      data: {
-        userId, type: "STAKING", status: "COMPLETED",
-        currency: pool.currency, amount: new Decimal(dto.amount),
-        description: `Staked in ${pool.name}`, referenceId: position.id,
-      },
-    });
-
-    this.logger.log(`Staked: ${userId} ${dto.amount} ${pool.currency} in ${pool.name}`);
+    await this.prisma.stakingPool.update({ where: { id: dto.poolId }, data: { totalStaked: { increment: dto.amount } } });
+    await this.prisma.transaction.create({ data: { userId, type: "STAKING", status: "COMPLETED", currency: pool.currency, amount: new Decimal(dto.amount), description: `Staked in ${pool.name}` } });
     return position;
   }
 
-  // ── Unstake ────────────────────────────────────────────────
-  async unstake(userId: string, dto: UnstakeDto) {
-    const pos = await this.prisma.stakingPosition.findFirst({
-      where: { id: dto.positionId, userId, status: "ACTIVE" },
-      include: { pool: true },
+  async unstake(userId: string, positionId: string) {
+    const pos = await this.prisma.stakingPosition.findUnique({ where: { id: positionId }, include: { pool: true } });
+    if (!pos || pos.userId !== userId) throw new NotFoundException("Stake not found");
+    if (pos.status !== "ACTIVE") throw new BadRequestException("Stake not active");
+    if (new Date() < pos.unlocksAt) throw new BadRequestException(`Locked until ${pos.unlocksAt.toLocaleDateString()}`);
+    const total = Number(pos.amount) + Number(pos.accruedReward);
+    await this.prisma.$transaction(async tx => {
+      await tx.stakingPosition.update({ where: { id: positionId }, data: { status: "COMPLETED", unstakedAt: new Date() } });
+      await tx.stakingPool.update({ where: { id: pos.poolId }, data: { totalStaked: { decrement: Number(pos.amount) } } });
+      await tx.wallet.updateMany({ where: { userId, type: "SPOT", currency: pos.pool.currency }, data: { balance: { increment: total }, lockedBalance: { decrement: Number(pos.amount) } } });
+      await tx.transaction.create({ data: { userId, type: "STAKING", status: "COMPLETED", currency: pos.pool.currency, amount: new Decimal(total), description: `Unstaked from ${pos.pool.name}` } });
     });
-    if (!pos) throw new NotFoundException("Active staking position not found");
-
-    // Lock period check
-    if (pos.endsAt && new Date() < pos.endsAt)
-      throw new BadRequestException(
-        `Locked until ${pos.endsAt.toISOString()} (${pos.pool.lockDays} days lock)`
-      );
-
-    const returnAmount = Number(pos.amount);
-    const earned       = Number(pos.earned);
-
-    await this.prisma.$transaction([
-      this.prisma.stakingPosition.update({
-        where: { id: pos.id },
-        data:  { status: "COMPLETED", claimedAt: new Date() },
-      }),
-      // Return principal + unclaimed rewards
-      this.prisma.wallet.updateMany({
-        where: { userId, type: "SPOT", currency: pos.pool.currency },
-        data:  { balance: { increment: returnAmount + earned } },
-      }),
-      this.prisma.transaction.create({
-        data: {
-          userId, type: "STAKING", status: "COMPLETED",
-          currency: pos.pool.currency,
-          amount:   new Decimal(returnAmount),
-          description: `Unstaked from ${pos.pool.name}`,
-          referenceId: pos.id,
-        },
-      }),
-    ]);
-
-    return { unstaked: true, returned: returnAmount, earned };
+    return { unstaked: true, returned: total };
   }
 
-  // ── User positions ─────────────────────────────────────────
-  async getPositions(userId: string, status?: string) {
+  async getUserPositions(userId: string) {
     return this.prisma.stakingPosition.findMany({
-      where:   { userId, ...(status ? { status: status as any } : {}) },
-      include: { pool: true },
-      orderBy: { startedAt: "desc" },
+      where: { userId }, include: { pool: true }, orderBy: { stakedAt: "desc" },
     });
   }
 
-  async getStats(userId: string) {
-    const positions = await this.prisma.stakingPosition.findMany({
-      where: { userId, status: "ACTIVE" },
-      include: { pool: true },
-    });
-    const totalStaked  = positions.reduce((s, p) => s + Number(p.amount), 0);
-    const totalEarned  = positions.reduce((s, p) => s + Number(p.earned), 0);
-    const avgApy       = positions.length > 0
-      ? positions.reduce((s, p) => s + Number(p.pool.apy), 0) / positions.length
-      : 0;
-    return { totalStaked, totalEarned, avgApy, activePositions: positions.length };
-  }
-
-  async calculateRewards(positionId: string) {
-    return this.rewards.previewRewards(positionId);
-  }
-
-  // ── Admin ──────────────────────────────────────────────────
-  async adminGetPositions(status?: string) {
-    return this.prisma.stakingPosition.findMany({
-      where:   status ? { status: status as any } : {},
-      include: { pool: true },
-      orderBy: { startedAt: "desc" },
-      take:    200,
-    });
-  }
-
-  async adminDistributeNow() {
-    await this.rewards.distributeDaily();
-    return { distributed: true };
+  async previewRewards(positionId: string) {
+    const pos = await this.prisma.stakingPosition.findUnique({ where: { id: positionId }, include: { pool: true } });
+    if (!pos) throw new NotFoundException("Position not found");
+    const days   = (Date.now() - pos.stakedAt.getTime()) / 86_400_000;
+    const daily  = Number(pos.amount) * (pos.pool.apy / 100) / 365;
+    const earned = daily * days;
+    return { earned, daily, daysStaked: Math.floor(days), apy: pos.pool.apy };
   }
 }

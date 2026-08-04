@@ -1,252 +1,102 @@
 /**
  * VNKR Trade — Compliance Service
  * Author: NGUYEN THI THU HUONG | GVI Tech JSC
- *
- * Implements:
- *  - NQ-05/2025/NQ-CP Điều 7  : Daily transaction limits
- *  - NĐ-284/2025 Điều 9       : STR (Suspicious Transaction Report) 48h deadline
- *  - NQ-05/2025/NQ-CP Điều 6  : ICO investor check (non-domestic only)
+ * NQ-05/2025/NQ-CP + NĐ-284/2025/NĐ-CP
  */
-import { Injectable, Logger, ForbiddenException } from "@nestjs/common";
-import { Cron }               from "@nestjs/schedule";
-import { PrismaService }      from "../../prisma/prisma.service";
-import { Decimal }            from "@prisma/client/runtime/library";
-import { FlagStrDto, SubmitStrDto } from "./dto/compliance.dto";
+import { Injectable, BadRequestException, Logger } from "@nestjs/common";
+import { Cron }          from "@nestjs/schedule";
+import { PrismaService } from "../../prisma/prisma.service";
+import { Decimal }       from "@prisma/client/runtime/library";
 
-// Daily limits per KYC level (VNKR token, NQ-05 Điều 7)
-const DAILY_LIMITS: Record<number, Record<string, number>> = {
-  0: { DEPOSIT: 5_000_000,   WITHDRAW: 5_000_000   },  // Level 0: 5M VND equiv
-  1: { DEPOSIT: 50_000_000,  WITHDRAW: 50_000_000  },  // Level 1: 50M
-  2: { DEPOSIT: 500_000_000, WITHDRAW: 500_000_000 },  // Level 2: 500M
-  3: { DEPOSIT: Infinity,    WITHDRAW: Infinity    },  // Level 3: unlimited
-};
-
-const STR_THRESHOLD_VND = 300_000_000; // 300M VND — báo cáo giao dịch đáng ngờ
+const KYC_DAILY_LIMITS: Record<number, number> = { 0: 0, 1: 100_000_000, 2: 1_000_000_000, 3: Infinity };
+const STR_THRESHOLD = 200_000_000; // NĐ-284 Điều 9: báo cáo giao dịch đáng ngờ ≥200M VND
+const LARGE_TX_VND  = 500_000_000;
 
 @Injectable()
 export class ComplianceService {
   private readonly logger = new Logger(ComplianceService.name);
-
   constructor(private prisma: PrismaService) {}
 
-  // ── Daily Limit Check (NQ-05 Điều 7) ──────────────────────
-  async getDailyLimit(userId: string, type: string, currency: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId }, select: { kycLevel: true },
-    });
-    const level  = user?.kycLevel ?? 0;
-    const limits = DAILY_LIMITS[level] ?? DAILY_LIMITS[0];
-    const limit  = limits[type] ?? 0;
-
-    // Calculate used today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const usedAgg = await this.prisma.transaction.aggregate({
-      where: {
-        userId,
-        type:      type as any,
-        currency,
-        status:    "COMPLETED",
-        createdAt: { gte: today },
-      },
-      _sum: { amount: true },
-    });
-    const used      = Number(usedAgg._sum.amount ?? 0);
-    const remaining = Math.max(0, limit === Infinity ? Infinity : limit - used);
-    const resetAt   = new Date(today.getTime() + 86400000);
-
-    return {
-      kycLevel: level,
-      type,
-      currency,
-      limit:     limit === Infinity ? null : limit,
-      used,
-      remaining: remaining === Infinity ? null : remaining,
-      resetAt,
-      legalBasis: "NQ-05/2025/NQ-CP Điều 7",
-    };
-  }
-
-  async assertDailyLimit(userId: string, type: string, currency: string, amount: number) {
-    const info = await this.getDailyLimit(userId, type, currency);
-    if (info.remaining !== null && amount > info.remaining) {
-      throw new ForbiddenException(
-        `Daily ${type} limit exceeded. Remaining: ${info.remaining} ${currency}. ` +
-        `Upgrade KYC to increase limit. (NQ-05/2025/NQ-CP Điều 7)`
-      );
+  async checkTransactionLimit(userId: string, amountVnd: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { kycLevel: true } });
+    const limit = KYC_DAILY_LIMITS[user?.kycLevel ?? 0] ?? 0;
+    if (amountVnd > limit) {
+      throw new BadRequestException(`Transaction exceeds daily limit for KYC Level ${user?.kycLevel ?? 0}. Limit: ${limit.toLocaleString()} VND`);
     }
+    return { allowed: true, kycLevel: user?.kycLevel, limit };
   }
 
-  // ── STR — Suspicious Transaction Report (NĐ-284 Điều 9) ────
-  async flagTransaction(dto: FlagStrDto, flaggedBy: string) {
-    const tx = await this.prisma.transaction.findUnique({
-      where: { id: dto.transactionId },
-    });
-
-    // Auto-flag if amount > threshold
-    const isAutoFlag = tx && Number(tx.amount) >= STR_THRESHOLD_VND;
-
-    const report = await this.prisma.strReport.create({
-      data: {
-        transactionId: dto.transactionId,
-        userId:        tx?.userId,
-        reason:        dto.reason,
-        status:        "PENDING",
-        // 48h deadline per NĐ-284/2025 Điều 9
-        deadlineAt:    new Date(Date.now() + 48 * 3600 * 1000),
-      },
-    });
-
-    await this.prisma.complianceAlert.create({
-      data: {
-        userId:      tx?.userId,
-        type:        "STR_FLAGGED",
-        severity:    dto.severity ?? (isAutoFlag ? "HIGH" : "MEDIUM"),
-        description: dto.reason,
-        status:      "OPEN",
-      },
-    });
-
-    this.logger.warn(
-      `STR flagged: tx=${dto.transactionId} by=${flaggedBy} severity=${dto.severity}`
-    );
-    return report;
-  }
-
-  async getStrSummary() {
-    const [pending, warning, critical, overdue] = await Promise.all([
-      this.prisma.strReport.count({ where: { status: "PENDING" } }),
-      this.prisma.strReport.count({
-        where: {
-          status:    "PENDING",
-          deadlineAt:{ gt: new Date(), lte: new Date(Date.now() + 12 * 3600 * 1000) },
-        },
-      }),
-      this.prisma.strReport.count({
-        where: { status: "PENDING", deadlineAt: { lte: new Date() } },
-      }),
-      this.prisma.strReport.count({
-        where: { status: "PENDING", deadlineAt: { lt: new Date() } },
-      }),
-    ]);
-
-    const reports = await this.prisma.strReport.findMany({
-      where:   { status: "PENDING" },
-      orderBy: { deadlineAt: "asc" },
-      take:    50,
-    });
-
-    return {
-      summary: { pending, warning, critical, overdue },
-      reports,
-      legalBasis: "NĐ-284/2025 Điều 9 — 48h reporting deadline",
-    };
-  }
-
-  async submitStrReport(dto: SubmitStrDto, submittedBy: string) {
-    const report = await this.prisma.strReport.update({
-      where: { id: dto.strReportId },
-      data:  { status: "SUBMITTED", submittedAt: new Date() },
-    });
-    this.logger.log(`STR submitted: ${dto.strReportId} ref=${dto.reportRef} by=${submittedBy}`);
-    return report;
-  }
-
-  async escalateStr(strReportId: string, adminId: string) {
-    return this.prisma.strReport.update({
-      where: { id: strReportId },
-      data:  { status: "ESCALATED" },
-    });
-  }
-
-  // ── ICO Investor Check (NQ-05 Điều 6) ─────────────────────
-  async checkIcoEligibility(userId: string): Promise<{ eligible: boolean; reason?: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId }, select: { kycLevel: true, settings: true },
-    });
-    const settings    = user?.settings as any;
-    const investorType = settings?.investorType ?? "DOMESTIC";
-
-    // NQ-05/2025/NQ-CP Điều 6: chặn nhà đầu tư cá nhân trong nước
-    if (!investorType || investorType === "DOMESTIC") {
-      return {
-        eligible: false,
-        reason: "Domestic individual investors are not permitted to purchase ICO tokens. " +
-                "(NQ-05/2025/NQ-CP Điều 6)",
-      };
-    }
-    if (user?.kycLevel === 0) {
-      return { eligible: false, reason: "KYC required for ICO participation" };
-    }
-    return { eligible: true };
-  }
-
-  // ── AML Monitoring ─────────────────────────────────────────
-  async getTransactionMonitoring(params: {
-    page?: number; minAmount?: number; flagged?: boolean;
-  }) {
-    const { page = 1, minAmount = 0, flagged } = params;
-    const where: any = {
-      ...(minAmount > 0 ? { amount: { gte: new Decimal(minAmount) } } : {}),
-    };
-    const [items, total] = await Promise.all([
-      this.prisma.transaction.findMany({
-        where, skip: (page-1)*30, take: 30,
-        orderBy: { createdAt: "desc" },
-        include: { user: { select: { email: true, kycLevel: true } } },
-      }),
-      this.prisma.transaction.count({ where }),
-    ]);
-    return { items, total, page };
-  }
-
-  async getAlerts(status?: string) {
-    return this.prisma.complianceAlert.findMany({
-      where:   status ? { status } : {},
-      orderBy: { createdAt: "desc" },
-      take:    100,
-    });
-  }
-
-  async getBlacklist() {
-    return this.prisma.blacklistEntry.findMany({ orderBy: { createdAt: "desc" } });
-  }
-
-  async addToBlacklist(type: string, value: string, reason: string) {
-    return this.prisma.blacklistEntry.upsert({
-      where:  { type_value: { type, value } },
-      update: { reason },
-      create: { type, value, reason },
-    });
-  }
-
-  // ── Cron: auto-flag large transactions ────────────────────
-  @Cron("0 */10 * * * *")
-  async autoFlagLargeTx() {
-    const large = await this.prisma.transaction.findMany({
-      where: {
-        amount:    { gte: new Decimal(STR_THRESHOLD_VND) },
-        status:    "COMPLETED",
-        createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) },
-      },
-    });
-
-    for (const tx of large) {
-      const existing = await this.prisma.strReport.findFirst({
-        where: { transactionId: tx.id },
+  async flagTransaction(userId: string, txId: string, amountVnd: number, description: string) {
+    if (amountVnd >= STR_THRESHOLD) {
+      await this.prisma.complianceAlert.create({
+        data: { userId, type: "STR", severity: "HIGH", description: `STR: ${description} — ${amountVnd.toLocaleString()} VND`, txId, status: "OPEN" },
       });
-      if (!existing) {
-        await this.prisma.strReport.create({
-          data: {
-            transactionId: tx.id,
-            userId:        tx.userId,
-            reason:        `Auto-flagged: amount ${Number(tx.amount)} ${tx.currency} ≥ threshold`,
-            status:        "PENDING",
-            deadlineAt:    new Date(Date.now() + 48 * 3600 * 1000),
-          },
+      this.logger.warn(`STR filed for user ${userId}, tx ${txId}, amount ${amountVnd}`);
+    }
+    return { flagged: amountVnd >= STR_THRESHOLD };
+  }
+
+  async getAlerts(status?: string, page = 1, limit = 20) {
+    const skip  = (page - 1) * limit;
+    const where = status ? { status } : {};
+    const [data, total] = await Promise.all([
+      this.prisma.complianceAlert.findMany({ where, skip, take: limit, orderBy: { createdAt: "desc" } }),
+      this.prisma.complianceAlert.count({ where }),
+    ]);
+    return { data, total, page, limit };
+  }
+
+  async resolveAlert(alertId: string, adminId: string, resolution: string) {
+    return this.prisma.complianceAlert.update({
+      where: { id: alertId },
+      data:  { status: "RESOLVED", resolvedBy: adminId, resolvedAt: new Date(), description: resolution },
+    });
+  }
+
+  async addToBlacklist(identifier: string, type: string, reason: string, addedBy: string) {
+    return this.prisma.complianceBlacklist.upsert({
+      where:  { identifier },
+      create: { identifier, type, reason, addedBy },
+      update: { reason, addedBy },
+    });
+  }
+
+  async checkBlacklist(identifier: string) {
+    return this.prisma.complianceBlacklist.findFirst({ where: { identifier } });
+  }
+
+  async getBlacklist(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.prisma.complianceBlacklist.findMany({ skip, take: limit, orderBy: { createdAt: "desc" } }),
+      this.prisma.complianceBlacklist.count(),
+    ]);
+    return { data, total, page, limit };
+  }
+
+  async getUserRisk(userId: string) {
+    const [alerts, txCount] = await Promise.all([
+      this.prisma.complianceAlert.count({ where: { userId, status: "OPEN" } }),
+      this.prisma.transaction.count({ where: { userId } }),
+    ]);
+    return { userId, openAlerts: alerts, txCount, riskScore: alerts * 10 };
+  }
+
+  @Cron("0 30 23 * * *")
+  async autoFlagLargeTransactions() {
+    const since = new Date(Date.now() - 86_400_000);
+    const large = await this.prisma.transaction.findMany({
+      where: { createdAt: { gte: since }, amount: { gt: new Decimal(LARGE_TX_VND / 25000) } },
+      take: 50,
+    });
+    for (const tx of large) {
+      const exists = await this.prisma.complianceAlert.findFirst({ where: { txId: tx.id } });
+      if (!exists) {
+        await this.prisma.complianceAlert.create({
+          data: { userId: tx.userId, type: "LARGE_TX", severity: "MEDIUM", description: `Auto-flagged large tx: ${tx.amount} ${tx.currency}`, txId: tx.id, status: "OPEN" },
         });
-        this.logger.warn(`Auto-STR: tx=${tx.id} amount=${tx.amount} ${tx.currency}`);
       }
     }
+    this.logger.log(`Auto-flagged ${large.length} large transactions`);
   }
 }

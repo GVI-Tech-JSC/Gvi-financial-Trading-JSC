@@ -2,7 +2,7 @@
 // VNKR Trade Platform — Prisma Schema
 // Author: NGUYEN THI THU HUONG | GVI Tech JSC
 // Domain: https://trading.vnkr.vn
-// Generated: 2025
+// License: MIT
 // ============================================================
 
 generator client {
@@ -14,79 +14,185 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── ENUMS ────────────────────────────────────────────────────
+// ── ENUMS ──────────────────────────────────────────────────────────────────────
 
-enum UserStatus     { ACTIVE INACTIVE SUSPENDED BANNED }
-enum WalletType     { FIAT SPOT ECO FUTURES COPY_TRADING }
-enum TxType         { DEPOSIT WITHDRAW TRANSFER TRADE FEE BONUS REFERRAL STAKING }
-enum TxStatus       { PENDING COMPLETED FAILED CANCELLED REVIEWING }
-enum OrderSide      { BUY SELL }
-enum OrderType      { MARKET LIMIT STOP_LIMIT }
-enum OrderStatus    { OPEN CLOSED CANCELED EXPIRED REJECTED }
-enum TimeInForce    { GTC IOC FOK PO }
-enum KycStatus      { PENDING REVIEWING APPROVED REJECTED }
-enum TicketStatus   { OPEN IN_PROGRESS RESOLVED CLOSED }
-enum StakingStatus  { ACTIVE COMPLETED CANCELLED }
-enum P2pOfferStatus { ACTIVE PAUSED COMPLETED CANCELLED }
-enum P2pTradeStatus { PENDING PAID APPEALING COMPLETED CANCELLED }
-enum BinaryResult   { WIN LOSS DRAW }
-enum FuturesSide    { LONG SHORT }
-enum FuturesStatus  { OPEN CLOSED LIQUIDATED }
-enum NotifChannel   { IN_APP EMAIL SMS PUSH }
-enum ExtStatus      { ACTIVE INACTIVE }
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BANNED
+}
 
-// ── USER & ACCESS ─────────────────────────────────────────────
+enum WalletType {
+  FIAT
+  SPOT
+  ECO
+  FUTURES
+  COPY_TRADING
+}
+
+enum TxType {
+  DEPOSIT
+  WITHDRAW
+  TRANSFER
+  TRADE
+  FEE
+  BONUS
+  REFERRAL
+  STAKING
+}
+
+enum TxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REVIEWING
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+  STOP_LIMIT
+}
+
+enum OrderStatus {
+  OPEN
+  CLOSED
+  CANCELED
+  EXPIRED
+  REJECTED
+}
+
+enum TimeInForce {
+  GTC
+  IOC
+  FOK
+  PO
+}
+
+enum KycStatus {
+  PENDING
+  REVIEWING
+  APPROVED
+  REJECTED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum StakingStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum P2pOfferStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum P2pTradeStatus {
+  PENDING
+  PAID
+  APPEALING
+  COMPLETED
+  CANCELLED
+}
+
+enum BinaryResult {
+  WIN
+  LOSS
+  DRAW
+}
+
+enum FuturesSide {
+  LONG
+  SHORT
+}
+
+enum FuturesStatus {
+  OPEN
+  CLOSED
+  LIQUIDATED
+}
+
+enum NotifChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum ExtStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ── USER & ACCESS ──────────────────────────────────────────────────────────────
 
 model User {
-  id                 String      @id @default(uuid())
-  email              String?     @unique
-  password           String?
-  firstName          String?
-  lastName           String?
-  avatar             String?
-  phone              String?
-  emailVerified      Boolean     @default(false)
-  phoneVerified      Boolean     @default(false)
-  role               String      @default("user")
-  kycLevel           Int         @default(0)
-  status             UserStatus  @default(ACTIVE)
-  referralCode       String?     @unique
-  referredById       String?
-  twoFactorEnabled   Boolean     @default(false)
-  twoFactorSecret    String?
-  walletAddress      String?
-  walletProvider     String?
-  lastLogin          DateTime?
-  settings           Json?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
-  deletedAt          DateTime?
+  id               String     @id @default(uuid())
+  email            String?    @unique
+  password         String?
+  firstName        String?
+  lastName         String?
+  avatar           String?
+  phone            String?
+  emailVerified    Boolean    @default(false)
+  phoneVerified    Boolean    @default(false)
+  role             String     @default("user")
+  kycLevel         Int        @default(0)
+  status           UserStatus @default(ACTIVE)
+  referralCode     String?    @unique
+  referredById     String?
+  twoFactorEnabled Boolean    @default(false)
+  twoFactorSecret  String?
+  walletAddress    String?
+  walletProvider   String?
+  lastLogin        DateTime?
+  settings         Json?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
 
-  // Relations
-  wallets            Wallet[]
-  transactions       Transaction[]
-  exchangeOrders     ExchangeOrder[]
-  futuresPositions   FuturesPosition[]
-  binaryOrders       BinaryOrder[]
-  kycApplications    KycApplication[]
-  supportTickets     SupportTicket[]
-  notifications      Notification[]
-  sessions           LoginSession[]
-  apiKeys            ApiKey[]
-  stakingPositions   StakingPosition[]
-  p2pOffers          P2pOffer[]
-  mlmReferrals       MlmReferral[]      @relation("Referrer")
-  auditLogs          AuditLog[]
+  wallets          Wallet[]
+  transactions     Transaction[]
+  exchangeOrders   ExchangeOrder[]
+  futuresPositions FuturesPosition[]
+  binaryOrders     BinaryOrder[]
+  kycApplications  KycApplication[]
+  supportTickets   SupportTicket[]
+  notifications    Notification[]
+  sessions         LoginSession[]
+  apiKeys          ApiKey[]
+  stakingPositions StakingPosition[]
+  p2pOffers        P2pOffer[]
+  mlmReferrals     MlmReferral[]     @relation("Referrer")
+  mlmReferred      MlmReferral[]     @relation("Referred")
+  auditLogs        AuditLog[]
 
   @@map("users")
 }
 
 model Role {
-  id          Int          @id @default(autoincrement())
-  name        String       @unique
+  id          Int              @id @default(autoincrement())
+  name        String           @unique
   description String?
   permissions RolePermission[]
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime         @default(now())
+
   @@map("roles")
 }
 
@@ -95,14 +201,16 @@ model Permission {
   action      String           @unique
   description String?
   roles       RolePermission[]
+
   @@map("permissions")
 }
 
 model RolePermission {
   roleId       Int
   permissionId Int
-  role         Role       @relation(fields: [roleId],       references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
   permission   Permission @relation(fields: [permissionId], references: [id])
+
   @@id([roleId, permissionId])
   @@map("role_permissions")
 }
@@ -110,12 +218,14 @@ model RolePermission {
 model LoginSession {
   id        String   @id @default(uuid())
   userId    String
-  ipAddress String?
+  token     String   @unique @db.VarChar(500)
+  ip        String?
   userAgent String?
-  token     String   @db.Text
-  expiresAt DateTime
   createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("login_sessions")
 }
 
@@ -123,122 +233,72 @@ model ApiKey {
   id          String    @id @default(uuid())
   userId      String
   name        String
-  key         String    @unique
-  permissions Json?
+  keyHash     String    @unique
+  permissions String?
   lastUsedAt  DateTime?
   expiresAt   DateTime?
-  status      ExtStatus @default(ACTIVE)
   createdAt   DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("api_keys")
 }
 
-// ── FINANCE ───────────────────────────────────────────────────
-
-model Currency {
-  id        String   @id @default(uuid())
-  symbol    String   @unique
-  name      String
-  type      String   @default("crypto")
-  decimals  Int      @default(8)
-  icon      String?
-  status    Boolean  @default(true)
-  chains    Json?
-  createdAt DateTime @default(now())
-  @@map("currencies")
-}
+// ── WALLET & FINANCE ───────────────────────────────────────────────────────────
 
 model Wallet {
-  id          String     @id @default(uuid())
-  userId      String
-  type        WalletType
-  currency    String
-  balance     Decimal    @default(0) @db.Decimal(30, 8)
-  inOrder     Decimal    @default(0) @db.Decimal(30, 8)
-  address     Json?
-  status      Boolean    @default(true)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  user        User       @relation(fields: [userId], references: [id])
-  @@unique([userId, type, currency])
+  id           String     @id @default(uuid())
+  userId       String
+  currency     String
+  type         WalletType @default(SPOT)
+  balance      Decimal    @default(0) @db.Decimal(30, 8)
+  lockedBalance Decimal   @default(0) @db.Decimal(30, 8)
+  address      String?
+  memo         String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, currency, type])
   @@map("wallets")
 }
 
 model Transaction {
-  id              String    @id @default(uuid())
-  userId          String
-  type            TxType
-  status          TxStatus  @default(PENDING)
-  currency        String
-  amount          Decimal   @db.Decimal(30, 8)
-  fee             Decimal   @default(0) @db.Decimal(30, 8)
-  referenceId     String?
-  txHash          String?
-  metadata        Json?
-  description     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  user            User      @relation(fields: [userId], references: [id])
+  id          String    @id @default(uuid())
+  userId      String
+  currency    String
+  amount      Decimal   @db.Decimal(30, 8)
+  fee         Decimal   @default(0) @db.Decimal(30, 8)
+  type        TxType
+  status      TxStatus  @default(PENDING)
+  reference   String?
+  txHash      String?
+  description String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("transactions")
 }
 
-model DepositMethod {
-  id          String   @id @default(uuid())
-  name        String
-  currency    String
-  type        String
-  minAmount   Decimal  @db.Decimal(30, 8)
-  maxAmount   Decimal? @db.Decimal(30, 8)
-  fee         Decimal  @default(0) @db.Decimal(10, 4)
-  feeType     String   @default("PERCENTAGE")
-  instructions Json?
-  status      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  @@map("deposit_methods")
+model DepositAddress {
+  id        String   @id @default(uuid())
+  userId    String
+  currency  String
+  network   String
+  address   String
+  memo      String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, currency, network])
+  @@map("deposit_addresses")
 }
 
-model WithdrawMethod {
-  id          String   @id @default(uuid())
-  name        String
-  currency    String
-  type        String
-  minAmount   Decimal  @db.Decimal(30, 8)
-  maxAmount   Decimal? @db.Decimal(30, 8)
-  fee         Decimal  @default(0) @db.Decimal(10, 4)
-  feeType     String   @default("PERCENTAGE")
-  status      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  @@map("withdraw_methods")
-}
-
-model AdminProfit {
-  id          String   @id @default(uuid())
-  type        String
-  currency    String
-  amount      Decimal  @db.Decimal(30, 8)
-  description String?
-  createdAt   DateTime @default(now())
-  @@map("admin_profits")
-}
-
-// ── EXCHANGE / SPOT ───────────────────────────────────────────
-
-model ExchangeMarket {
-  id          String   @id @default(uuid())
-  symbol      String   @unique
-  base        String
-  quote       String
-  minAmount   Decimal  @db.Decimal(30, 8)
-  maxAmount   Decimal? @db.Decimal(30, 8)
-  minPrice    Decimal? @db.Decimal(30, 8)
-  maxPrice    Decimal? @db.Decimal(30, 8)
-  makerFee    Decimal  @default(0.001) @db.Decimal(10, 6)
-  takerFee    Decimal  @default(0.001) @db.Decimal(10, 6)
-  status      Boolean  @default(true)
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  @@map("exchange_markets")
-}
+// ── EXCHANGE ────────────────────────────────────────────────────────────────────
 
 model ExchangeOrder {
   id          String      @id @default(uuid())
@@ -246,493 +306,456 @@ model ExchangeOrder {
   symbol      String
   side        OrderSide
   type        OrderType
-  timeInForce TimeInForce @default(GTC)
   status      OrderStatus @default(OPEN)
-  price       Decimal     @db.Decimal(30, 8)
+  price       Decimal?    @db.Decimal(30, 8)
   amount      Decimal     @db.Decimal(30, 8)
   filled      Decimal     @default(0) @db.Decimal(30, 8)
   remaining   Decimal     @db.Decimal(30, 8)
-  cost        Decimal     @default(0) @db.Decimal(30, 8)
+  cost        Decimal?    @db.Decimal(30, 8)
   fee         Decimal     @default(0) @db.Decimal(30, 8)
-  feeCurrency String?
-  referenceId String?
+  timeInForce TimeInForce @default(GTC)
+  clientId    String?
   metadata    Json?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
-  user        User        @relation(fields: [userId], references: [id])
+  closedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, symbol])
+  @@index([symbol, status])
   @@map("exchange_orders")
 }
 
-// ── BINARY OPTIONS ────────────────────────────────────────────
-
-model BinaryMarket {
-  id          String   @id @default(uuid())
-  symbol      String   @unique
-  description String?
-  payoutRate  Decimal  @db.Decimal(5, 2)
-  status      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  orders      BinaryOrder[]
-  @@map("binary_markets")
-}
-
-model BinaryOrder {
-  id          String       @id @default(uuid())
-  userId      String
-  marketId    String
-  side        String
-  amount      Decimal      @db.Decimal(30, 8)
-  openPrice   Decimal      @db.Decimal(30, 8)
-  closePrice  Decimal?     @db.Decimal(30, 8)
-  profit      Decimal?     @db.Decimal(30, 8)
-  result      BinaryResult?
-  expiresAt   DateTime
-  closedAt    DateTime?
-  createdAt   DateTime     @default(now())
-  user        User         @relation(fields: [userId], references: [id])
-  market      BinaryMarket @relation(fields: [marketId], references: [id])
-  @@map("binary_orders")
-}
-
-// ── FUTURES ───────────────────────────────────────────────────
-
-model FuturesMarket {
-  id               String   @id @default(uuid())
-  symbol           String   @unique
-  base             String
-  quote            String
-  maxLeverage      Int      @default(125)
-  maintMarginRate  Decimal  @db.Decimal(10, 6)
-  takerFee         Decimal  @db.Decimal(10, 6)
-  makerFee         Decimal  @db.Decimal(10, 6)
-  fundingInterval  Int      @default(8)
-  status           Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  @@map("futures_markets")
-}
+// ── FUTURES ─────────────────────────────────────────────────────────────────────
 
 model FuturesPosition {
-  id             String        @id @default(uuid())
-  userId         String
-  symbol         String
-  side           FuturesSide
-  status         FuturesStatus @default(OPEN)
-  leverage       Int
-  entryPrice     Decimal       @db.Decimal(30, 8)
-  markPrice      Decimal?      @db.Decimal(30, 8)
-  closePrice     Decimal?      @db.Decimal(30, 8)
-  size           Decimal       @db.Decimal(30, 8)
-  margin         Decimal       @db.Decimal(30, 8)
-  unrealizedPnl  Decimal?      @db.Decimal(30, 8)
-  realizedPnl    Decimal?      @db.Decimal(30, 8)
-  liquidationPrice Decimal?    @db.Decimal(30, 8)
-  openedAt       DateTime      @default(now())
-  closedAt       DateTime?
-  user           User          @relation(fields: [userId], references: [id])
+  id               String        @id @default(uuid())
+  userId           String
+  symbol           String
+  side             FuturesSide
+  status           FuturesStatus @default(OPEN)
+  leverage         Int           @default(1)
+  margin           Decimal       @db.Decimal(30, 8)
+  size             Decimal       @db.Decimal(30, 8)
+  entryPrice       Decimal       @db.Decimal(30, 8)
+  markPrice        Decimal?      @db.Decimal(30, 8)
+  liquidationPrice Decimal?      @db.Decimal(30, 8)
+  unrealizedPnl    Decimal       @default(0) @db.Decimal(30, 8)
+  realizedPnl      Decimal       @default(0) @db.Decimal(30, 8)
+  fundingFee       Decimal       @default(0) @db.Decimal(30, 8)
+  closedAt         DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
   @@map("futures_positions")
 }
 
-model FuturesFundingRate {
-  id        String   @id @default(uuid())
-  symbol    String
-  rate      Decimal  @db.Decimal(20, 10)
-  timestamp DateTime @default(now())
-  @@map("futures_funding_rates")
+// ── BINARY OPTIONS ──────────────────────────────────────────────────────────────
+
+model BinaryOrder {
+  id         String       @id @default(uuid())
+  userId     String
+  symbol     String
+  direction  String
+  amount     Decimal      @db.Decimal(30, 8)
+  payout     Decimal      @default(0) @db.Decimal(30, 8)
+  entryPrice Decimal?     @db.Decimal(30, 8)
+  exitPrice  Decimal?     @db.Decimal(30, 8)
+  status     String       @default("PENDING")
+  result     BinaryResult?
+  expiresAt  DateTime
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status, expiresAt])
+  @@map("binary_orders")
 }
 
-// ── KYC / AML ─────────────────────────────────────────────────
-
-model KycLevel {
-  id              Int      @id @default(autoincrement())
-  name            String
-  description     String?
-  depositLimit    Decimal? @db.Decimal(30, 8)
-  withdrawLimit   Decimal? @db.Decimal(30, 8)
-  requirements    Json?
-  createdAt       DateTime @default(now())
-  @@map("kyc_levels")
-}
+// ── KYC ────────────────────────────────────────────────────────────────────────
 
 model KycApplication {
-  id         String    @id @default(uuid())
-  userId     String
-  level      Int
-  status     KycStatus @default(PENDING)
-  documents  Json?
-  notes      String?   @db.Text
-  reviewedAt DateTime?
-  reviewedBy String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  user       User      @relation(fields: [userId], references: [id])
+  id              String    @id @default(uuid())
+  userId          String
+  level           Int       @default(1)
+  status          KycStatus @default(PENDING)
+  fullName        String?
+  idType          String?
+  idNumber        String?
+  dob             String?
+  nationality     String?
+  address         String?
+  frontImageUrl   String?
+  backImageUrl    String?
+  selfieUrl       String?
+  rejectionReason String?
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  submittedAt     DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("kyc_applications")
 }
 
-model AmlScreening {
-  id          String   @id @default(uuid())
-  userId      String
-  riskScore   Int      @default(0)
-  riskLevel   String   @default("LOW")
-  flags       Json?
-  screenedAt  DateTime @default(now())
-  @@map("aml_screenings")
-}
-
-model BlacklistEntry {
-  id          String   @id @default(uuid())
-  type        String
-  value       String
-  reason      String?
-  createdAt   DateTime @default(now())
-  @@unique([type, value])
-  @@map("blacklist_entries")
-}
-
-// ── STAKING ───────────────────────────────────────────────────
+// ── STAKING ────────────────────────────────────────────────────────────────────
 
 model StakingPool {
-  id           String     @id @default(uuid())
+  id           String    @id @default(uuid())
   name         String
   currency     String
-  apy          Decimal    @db.Decimal(10, 4)
-  minAmount    Decimal    @db.Decimal(30, 8)
-  maxAmount    Decimal?   @db.Decimal(30, 8)
-  lockDays     Int        @default(0)
-  autoCompound Boolean    @default(false)
-  status       ExtStatus  @default(ACTIVE)
-  createdAt    DateTime   @default(now())
-  positions    StakingPosition[]
+  apy          Float
+  minAmount    Decimal   @db.Decimal(30, 8)
+  lockDays     Int       @default(0)
+  totalStaked  Decimal   @default(0) @db.Decimal(30, 8)
+  status       ExtStatus @default(ACTIVE)
+  autoCompound Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  positions StakingPosition[]
+
   @@map("staking_pools")
 }
 
 model StakingPosition {
-  id          String        @id @default(uuid())
-  userId      String
-  poolId      String
-  amount      Decimal       @db.Decimal(30, 8)
-  earned      Decimal       @default(0) @db.Decimal(30, 8)
-  status      StakingStatus @default(ACTIVE)
-  startedAt   DateTime      @default(now())
-  endsAt      DateTime?
-  claimedAt   DateTime?
-  user        User          @relation(fields: [userId], references: [id])
-  pool        StakingPool   @relation(fields: [poolId], references: [id])
+  id            String        @id @default(uuid())
+  userId        String
+  poolId        String
+  amount        Decimal       @db.Decimal(30, 8)
+  accruedReward Decimal       @default(0) @db.Decimal(30, 8)
+  status        StakingStatus @default(ACTIVE)
+  stakedAt      DateTime      @default(now())
+  unlocksAt     DateTime
+  unstakedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pool StakingPool @relation(fields: [poolId], references: [id])
+
+  @@index([userId, status])
   @@map("staking_positions")
 }
 
-// ── P2P ───────────────────────────────────────────────────────
+// ── P2P ────────────────────────────────────────────────────────────────────────
 
 model P2pOffer {
-  id             String        @id @default(uuid())
+  id             String         @id @default(uuid())
   userId         String
-  side           OrderSide
+  type           OrderSide
   currency       String
   fiatCurrency   String
-  price          Decimal       @db.Decimal(30, 8)
-  minAmount      Decimal       @db.Decimal(30, 8)
-  maxAmount      Decimal       @db.Decimal(30, 8)
-  available      Decimal       @db.Decimal(30, 8)
-  paymentMethods Json?
-  terms          String?       @db.Text
+  price          Decimal        @db.Decimal(30, 8)
+  minAmount      Decimal        @db.Decimal(30, 8)
+  maxAmount      Decimal        @db.Decimal(30, 8)
+  available      Decimal        @db.Decimal(30, 8)
+  paymentMethod  String
+  terms          String?        @db.Text
   status         P2pOfferStatus @default(ACTIVE)
-  createdAt      DateTime      @default(now())
-  user           User          @relation(fields: [userId], references: [id])
-  trades         P2pTrade[]
+  escrowLocked   Decimal        @default(0) @db.Decimal(30, 8)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trades P2pTrade[]
+
+  @@index([type, currency, status])
   @@map("p2p_offers")
 }
 
 model P2pTrade {
-  id          String        @id @default(uuid())
-  offerId     String
-  buyerId     String
-  amount      Decimal       @db.Decimal(30, 8)
-  price       Decimal       @db.Decimal(30, 8)
-  fiatAmount  Decimal       @db.Decimal(30, 8)
-  status      P2pTradeStatus @default(PENDING)
-  paymentProof String?
-  releasedAt  DateTime?
-  createdAt   DateTime      @default(now())
-  offer       P2pOffer      @relation(fields: [offerId], references: [id])
+  id             String         @id @default(uuid())
+  offerId        String
+  buyerId        String
+  sellerId       String
+  amount         Decimal        @db.Decimal(30, 8)
+  fiatAmount     Decimal        @db.Decimal(30, 8)
+  status         P2pTradeStatus @default(PENDING)
+  paymentProof   String?
+  disputeReason  String?
+  resolvedBy     String?
+  paidAt         DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  offer P2pOffer @relation(fields: [offerId], references: [id])
+
   @@map("p2p_trades")
 }
 
-// ── AFFILIATE / MLM ───────────────────────────────────────────
+// ── AFFILIATE / MLM ────────────────────────────────────────────────────────────
 
 model MlmReferral {
-  id           String   @id @default(uuid())
-  referrerId   String
-  refereeId    String   @unique
-  level        Int      @default(1)
-  commission   Decimal  @default(0) @db.Decimal(30, 8)
-  currency     String   @default("USDT")
-  status       String   @default("ACTIVE")
-  createdAt    DateTime @default(now())
-  referrer     User     @relation("Referrer", fields: [referrerId], references: [id])
+  id             String   @id @default(uuid())
+  referrerId     String
+  referredId     String
+  level          Int      @default(1)
+  commissionRate Float    @default(0)
+  totalCommission Decimal @default(0) @db.Decimal(30, 8)
+  createdAt      DateTime @default(now())
+
+  referrer User @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referred User @relation("Referred", fields: [referredId], references: [id], onDelete: Cascade)
+
+  @@unique([referrerId, referredId])
   @@map("mlm_referrals")
 }
 
-model MlmCommissionTier {
-  id         String   @id @default(uuid())
-  level      Int      @unique
-  percentage Decimal  @db.Decimal(10, 4)
-  minVolume  Decimal? @db.Decimal(30, 8)
-  createdAt  DateTime @default(now())
-  @@map("mlm_commission_tiers")
+model AffiliateCommission {
+  id            String   @id @default(uuid())
+  referrerId    String
+  referredId    String
+  sourceOrderId String?
+  amount        Decimal  @db.Decimal(30, 8)
+  currency      String   @default("USDT")
+  level         Int
+  status        String   @default("PENDING")
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([referrerId])
+  @@map("affiliate_commissions")
 }
 
-// ── ECOSYSTEM (ON-CHAIN) ──────────────────────────────────────
+// ── ECOSYSTEM (On-chain) ───────────────────────────────────────────────────────
 
 model EcoBlockchain {
   id          String    @id @default(uuid())
-  name        String
-  symbol      String    @unique
+  name        String    @unique
+  symbol      String
   chainId     Int?
   rpcUrl      String?
   explorerUrl String?
-  type        String    @default("EVM")
+  nativeCoin  String
   status      ExtStatus @default(ACTIVE)
   createdAt   DateTime  @default(now())
-  tokens      EcoToken[]
+  updatedAt   DateTime  @updatedAt
+
+  tokens EcoToken[]
+
   @@map("eco_blockchains")
 }
 
 model EcoToken {
-  id           String       @id @default(uuid())
-  blockchainId String
-  name         String
-  symbol       String
-  decimals     Int          @default(18)
-  contractAddr String?
-  type         String       @default("ERC20")
-  status       ExtStatus    @default(ACTIVE)
-  createdAt    DateTime     @default(now())
-  blockchain   EcoBlockchain @relation(fields: [blockchainId], references: [id])
-  @@unique([blockchainId, symbol])
+  id              String        @id @default(uuid())
+  blockchainId    String
+  name            String
+  symbol          String
+  contractAddress String?
+  decimals        Int           @default(18)
+  status          ExtStatus     @default(ACTIVE)
+  depositEnabled  Boolean       @default(true)
+  withdrawEnabled Boolean       @default(true)
+  minDeposit      Decimal       @default(0) @db.Decimal(30, 8)
+  minWithdraw     Decimal       @default(0) @db.Decimal(30, 8)
+  withdrawFee     Decimal       @default(0) @db.Decimal(30, 8)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  blockchain EcoBlockchain @relation(fields: [blockchainId], references: [id])
+
   @@map("eco_tokens")
 }
 
-model EcoCustodialWallet {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  address     String
-  chain       String
-  publicKey   String?
-  status      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  @@map("eco_custodial_wallets")
+model EcoWallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  address   String   @unique
+  network   String
+  index     Int
+  createdAt DateTime @default(now())
+
+  @@map("eco_wallets")
 }
 
-model EcoMasterWallet {
-  id          String   @id @default(uuid())
-  chain       String   @unique
-  address     String
-  xpub        String?  @db.Text
-  status      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  @@map("eco_master_wallets")
-}
+// ── COMPLIANCE ─────────────────────────────────────────────────────────────────
 
-// ── SUPPORT ───────────────────────────────────────────────────
-
-model SupportTicket {
-  id          String        @id @default(uuid())
+model ComplianceAlert {
+  id          String    @id @default(uuid())
   userId      String
-  subject     String
-  status      TicketStatus  @default(OPEN)
-  priority    String        @default("MEDIUM")
-  assignedTo  String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  user        User          @relation(fields: [userId], references: [id])
-  messages    TicketMessage[]
-  @@map("support_tickets")
+  type        String
+  severity    String    @default("LOW")
+  description String    @db.Text
+  txId        String?
+  status      String    @default("OPEN")
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@map("compliance_alerts")
 }
 
-model TicketMessage {
-  id        String       @id @default(uuid())
-  ticketId  String
-  senderId  String
-  content   String       @db.Text
-  createdAt DateTime     @default(now())
-  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
-  @@map("ticket_messages")
+model ComplianceBlacklist {
+  id         String   @id @default(uuid())
+  identifier String   @unique
+  type       String
+  reason     String?
+  addedBy    String?
+  createdAt  DateTime @default(now())
+
+  @@map("compliance_blacklist")
 }
 
-// ── NOTIFICATIONS ─────────────────────────────────────────────
+// ── NOTIFICATIONS ──────────────────────────────────────────────────────────────
 
 model Notification {
   id        String       @id @default(uuid())
   userId    String
-  channel   NotifChannel @default(IN_APP)
   title     String
   message   String       @db.Text
+  type      String       @default("INFO")
+  channel   NotifChannel @default(IN_APP)
   isRead    Boolean      @default(false)
   metadata  Json?
   createdAt DateTime     @default(now())
-  user      User         @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
   @@map("notifications")
 }
 
-model NotificationTemplate {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  subject   String?
-  body      String   @db.Text
-  channel   NotifChannel
-  variables Json?
-  createdAt DateTime @default(now())
-  @@map("notification_templates")
-}
-
-// ── BLOG / CONTENT ────────────────────────────────────────────
+// ── CMS — BLOG ─────────────────────────────────────────────────────────────────
 
 model BlogPost {
-  id          String     @id @default(uuid())
+  id          String   @id @default(uuid())
+  authorId    String
+  slug        String   @unique
   title       String
-  slug        String     @unique
-  content     String     @db.LongText
-  excerpt     String?    @db.Text
-  authorId    String?
-  categoryId  String?
-  status      String     @default("DRAFT")
+  excerpt     String?  @db.Text
+  content     String   @db.LongText
+  category    String?
+  tags        Json?
+  status      String   @default("draft")
+  viewCount   Int      @default(0)
   publishedAt DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  tags        BlogPostTag[]
-  comments    BlogComment[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([slug])
+  @@index([status])
   @@map("blog_posts")
 }
 
-model BlogCategory {
+// ── CMS — LEARN ────────────────────────────────────────────────────────────────
+
+model LearnCourse {
+  id          String       @id @default(uuid())
+  slug        String       @unique
+  title       String
+  description String?      @db.Text
+  level       String       @default("beginner")
+  category    String?
+  duration    Int?
+  status      String       @default("draft")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  lessons LearnLesson[]
+
+  @@map("learn_courses")
+}
+
+model LearnLesson {
   id        String   @id @default(uuid())
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  @@map("blog_categories")
-}
-
-model BlogTag {
-  id        String       @id @default(uuid())
-  name      String       @unique
-  slug      String       @unique
-  posts     BlogPostTag[]
-  createdAt DateTime     @default(now())
-  @@map("blog_tags")
-}
-
-model BlogPostTag {
-  postId String
-  tagId  String
-  post   BlogPost @relation(fields: [postId], references: [id])
-  tag    BlogTag  @relation(fields: [tagId],  references: [id])
-  @@id([postId, tagId])
-  @@map("blog_post_tags")
-}
-
-model BlogComment {
-  id        String   @id @default(uuid())
-  postId    String
-  userId    String?
-  content   String   @db.Text
-  status    String   @default("PENDING")
-  createdAt DateTime @default(now())
-  post      BlogPost @relation(fields: [postId], references: [id])
-  @@map("blog_comments")
-}
-
-model Page {
-  id        String   @id @default(uuid())
+  courseId  String
   title     String
-  slug      String   @unique
   content   String   @db.LongText
-  status    String   @default("DRAFT")
+  order     Int      @default(0)
+  duration  Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  @@map("pages")
+
+  course LearnCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, order])
+  @@map("learn_lessons")
 }
 
-model Slider {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  image       String
-  link        String?
-  order       Int      @default(0)
-  status      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  @@map("sliders")
+// ── SUPPORT TICKET ─────────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id        String       @id @default(uuid())
+  userId    String
+  subject   String
+  message   String       @db.Text
+  status    TicketStatus @default(OPEN)
+  priority  String       @default("NORMAL")
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages TicketMessage[]
+
+  @@map("support_tickets")
 }
 
-// ── SYSTEM ────────────────────────────────────────────────────
+model TicketMessage {
+  id        String   @id @default(uuid())
+  ticketId  String
+  senderId  String
+  message   String   @db.Text
+  isStaff   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_messages")
+}
+
+// ── SYSTEM ─────────────────────────────────────────────────────────────────────
 
 model Setting {
-  id        String   @id @default(uuid())
+  id        Int      @id @default(autoincrement())
   key       String   @unique
-  value     Json
+  value     String?  @db.Text
   group     String   @default("general")
+  isPublic  Boolean  @default(false)
   updatedAt DateTime @updatedAt
+
   @@map("settings")
 }
 
-model Announcement {
-  id        String   @id @default(uuid())
-  title     String
-  content   String   @db.Text
-  type      String   @default("INFO")
-  isActive  Boolean  @default(true)
-  expiresAt DateTime?
-  createdAt DateTime @default(now())
-  @@map("announcements")
-}
-
 model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?
-  action    String
-  entity    String?
-  entityId  String?
-  before    Json?
-  after     Json?
-  ipAddress String?
-  createdAt DateTime @default(now())
-  user      User?    @relation(fields: [userId], references: [id])
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entity     String?
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity, entityId])
   @@map("audit_logs")
 }
 
-model Extension {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  displayName String
-  version     String    @default("1.0.0")
-  status      ExtStatus @default(INACTIVE)
-  config      Json?
-  installedAt DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  @@map("extensions")
-}
+model Faq {
+  id        String   @id @default(uuid())
+  question  String
+  answer    String   @db.Text
+  category  String?
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-// ── COMPLIANCE (NQ-05, NĐ-284) ────────────────────────────────
-
-model ComplianceAlert {
-  id          String   @id @default(uuid())
-  userId      String?
-  type        String
-  severity    String   @default("LOW")
-  description String   @db.Text
-  status      String   @default("OPEN")
-  reportedAt  DateTime?
-  createdAt   DateTime @default(now())
-  @@map("compliance_alerts")
-}
-
-model StrReport {
-  id              String   @id @default(uuid())
-  transactionId   String?
-  userId          String?
-  reason          String   @db.Text
-  status          String   @default("PENDING")
-  submittedAt     DateTime?
-  deadlineAt      DateTime?
-  createdAt       DateTime @default(now())
-  @@map("str_reports")
+  @@map("faqs")
 }

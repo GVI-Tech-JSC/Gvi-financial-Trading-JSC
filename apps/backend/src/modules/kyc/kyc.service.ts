@@ -1,119 +1,50 @@
-/**
- * VNKR Trade — KYC Service
- * Author: NGUYEN THI THU HUONG | GVI Tech JSC
- */
 import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
-import { PrismaService }  from "../../prisma/prisma.service";
+import { PrismaService } from "../../prisma/prisma.service";
 import { SubmitKycDto, ReviewKycDto } from "./dto/kyc.dto";
 
 @Injectable()
 export class KycService {
   private readonly logger = new Logger(KycService.name);
-
   constructor(private prisma: PrismaService) {}
 
-  async getLevels() {
-    return this.prisma.kycLevel.findMany({ orderBy: { id: "asc" } });
+  async getStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { kycLevel: true } });
+    const app  = await this.prisma.kycApplication.findFirst({ where: { userId }, orderBy: { createdAt: "desc" } });
+    return { level: user?.kycLevel ?? 0, status: app?.status ?? "NONE", submittedAt: app?.submittedAt, rejectionReason: app?.rejectionReason };
   }
 
-  async getUserLevel(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId }, select: { kycLevel: true },
-    });
-    const levels = await this.prisma.kycLevel.findMany();
-    return { currentLevel: user?.kycLevel ?? 0, levels };
-  }
-
-  async getApplication(userId: string) {
-    return this.prisma.kycApplication.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
-  }
-
-  async submitApplication(userId: string, dto: SubmitKycDto) {
-    // Check for pending application
-    const pending = await this.prisma.kycApplication.findFirst({
-      where: { userId, status: { in: ["PENDING", "REVIEWING"] } },
-    });
-    if (pending) throw new BadRequestException("You already have a pending KYC application");
-
+  async submit(userId: string, dto: SubmitKycDto) {
+    const pending = await this.prisma.kycApplication.findFirst({ where: { userId, status: "PENDING" } });
+    if (pending) throw new BadRequestException("You already have a pending application");
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { kycLevel: true } });
     return this.prisma.kycApplication.create({
-      data: {
-        userId,
-        level:  dto.level,
-        status: "PENDING",
-        documents: {
-          type:     dto.documentType,
-          frontUrl: dto.frontUrl,
-          backUrl:  dto.backUrl,
-          selfieUrl:dto.selfieUrl,
-        },
-        notes: dto.notes,
-      },
+      data: { userId, level: (user?.kycLevel ?? 0) + 1, status: "PENDING", fullName: dto.fullName, idType: dto.idType, idNumber: dto.idNumber, dob: dto.dob, nationality: dto.nationality, address: dto.address },
     });
   }
 
-  // ── Admin operations ─────────────────────────────────────────
-  async listApplications(status?: string) {
+  async getApplications(status?: string) {
     return this.prisma.kycApplication.findMany({
       where: status ? { status: status as any } : {},
-      orderBy: { createdAt: "desc" },
-      take: 100,
+      include: { user: { select: { email: true, firstName: true, lastName: true } } },
+      orderBy: { createdAt: "desc" }, take: 100,
     });
   }
 
-  async reviewApplication(id: string, reviewerId: string, dto: ReviewKycDto) {
-    const app = await this.prisma.kycApplication.findUnique({ where: { id } });
-    if (!app) throw new NotFoundException("KYC application not found");
-    if (app.status !== "PENDING" && app.status !== "REVIEWING")
-      throw new BadRequestException("Application already processed");
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.kycApplication.update({
-        where: { id },
-        data: {
-          status:     dto.status as any,
-          notes:      dto.reason,
-          reviewedAt: new Date(),
-          reviewedBy: reviewerId,
-        },
-      });
-      // If approved, update user KYC level
-      if (dto.status === "APPROVED") {
-        await tx.user.update({
-          where: { id: app.userId },
-          data:  { kycLevel: app.level },
-        });
-      }
+  async review(applicationId: string, dto: ReviewKycDto, adminId: string) {
+    const app = await this.prisma.kycApplication.findUnique({ where: { id: applicationId } });
+    if (!app) throw new NotFoundException("Application not found");
+    if (app.status !== "PENDING") throw new BadRequestException("Application already reviewed");
+    const updated = await this.prisma.kycApplication.update({
+      where: { id: applicationId },
+      data:  { status: dto.approved ? "APPROVED" : "REJECTED", rejectionReason: dto.rejectionReason, reviewedBy: adminId, reviewedAt: new Date() },
     });
-
-    this.logger.log(`KYC ${id} ${dto.status} by ${reviewerId}`);
-    return { id, status: dto.status };
+    if (dto.approved) {
+      await this.prisma.user.update({ where: { id: app.userId }, data: { kycLevel: { increment: 1 } } });
+    }
+    return updated;
   }
 
-  // ── AML Screening ────────────────────────────────────────────
-  async checkAml(userId: string) {
-    const screening = await this.prisma.amlScreening.findFirst({
-      where: { userId },
-      orderBy: { screenedAt: "desc" },
-    });
-    // Check blacklist
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId }, select: { email: true, walletAddress: true },
-    });
-    const blacklisted = user?.email
-      ? await this.prisma.blacklistEntry.findFirst({
-          where: { type: "EMAIL", value: user.email },
-        })
-      : null;
-
-    return {
-      userId,
-      riskScore: screening?.riskScore ?? 0,
-      riskLevel: screening?.riskLevel ?? "LOW",
-      blacklisted: !!blacklisted,
-      screenedAt: screening?.screenedAt ?? null,
-    };
+  async checkBlacklist(identifier: string) {
+    return this.prisma.complianceBlacklist.findFirst({ where: { identifier } });
   }
 }

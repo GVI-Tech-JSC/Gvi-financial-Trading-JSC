@@ -1,17 +1,13 @@
-import { IsString, IsInt, IsOptional, IsEnum, Min, Max } from "class-validator";
-import { ApiProperty } from "@nestjs/swagger";
-
+import { IsString, IsOptional, IsBoolean } from "class-validator";
 export class SubmitKycDto {
-  @ApiProperty({ example: 1 })           @IsInt() @Min(1) @Max(3)     level:        number;
-  @ApiProperty({ example: "PASSPORT" })  @IsString()                  documentType: string;
-  @ApiProperty({ required: false })      @IsOptional() @IsString()    frontUrl?:    string;
-  @ApiProperty({ required: false })      @IsOptional() @IsString()    backUrl?:     string;
-  @ApiProperty({ required: false })      @IsOptional() @IsString()    selfieUrl?:   string;
-  @ApiProperty({ required: false })      @IsOptional() @IsString()    notes?:       string;
+  @IsString() fullName: string;
+  @IsString() idType: string;
+  @IsString() idNumber: string;
+  @IsString() @IsOptional() dob?: string;
+  @IsString() @IsOptional() nationality?: string;
+  @IsString() @IsOptional() address?: string;
 }
-
 export class ReviewKycDto {
-  @ApiProperty({ enum: ["APPROVED","REJECTED"] })
-  @IsEnum(["APPROVED","REJECTED"])                                     status:   string;
-  @ApiProperty({ required: false }) @IsOptional() @IsString()         reason?:  string;
+  @IsBoolean() approved: boolean;
+  @IsString() @IsOptional() rejectionReason?: string;
 }

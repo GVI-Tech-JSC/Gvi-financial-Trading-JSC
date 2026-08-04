@@ -1,22 +1,13 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, Min } from "class-validator";
-import { ApiProperty } from "@nestjs/swagger";
-
+import { IsString, IsNumber, IsOptional, Min, IsBoolean, IsInt } from "class-validator";
 export class StakeDto {
-  @ApiProperty({ example: "pool-uuid" }) @IsString()              poolId:  string;
-  @ApiProperty({ example: 100 })         @IsNumber() @Min(0.00001) amount:  number;
-  @ApiProperty({ required: false })      @IsOptional() @IsBoolean() autoCompound?: boolean;
+  @IsString() poolId: string;
+  @IsNumber() @Min(0.001) amount: number;
 }
-
-export class UnstakeDto {
-  @ApiProperty({ example: "position-uuid" }) @IsString() positionId: string;
-}
-
 export class CreatePoolDto {
-  @ApiProperty() @IsString()               name:        string;
-  @ApiProperty() @IsString()               currency:    string;
-  @ApiProperty() @IsNumber() @Min(0)       apy:         number;
-  @ApiProperty() @IsNumber() @Min(0)       minAmount:   number;
-  @ApiProperty({ required: false }) @IsOptional() @IsNumber() maxAmount?: number;
-  @ApiProperty({ required: false }) @IsOptional() @IsNumber() lockDays?:  number;
-  @ApiProperty({ required: false }) @IsOptional() @IsBoolean() autoCompound?: boolean;
+  @IsString() name: string;
+  @IsString() currency: string;
+  @IsNumber() apy: number;
+  @IsNumber() minAmount: number;
+  @IsInt() @IsOptional() lockDays?: number;
+  @IsBoolean() @IsOptional() autoCompound?: boolean;
 }

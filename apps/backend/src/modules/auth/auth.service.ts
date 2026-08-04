@@ -68,8 +68,8 @@ export class AuthService {
 
   private signTokens(userId: string, email: string, role: string) {
     const payload = { sub: userId, email, role };
-    const accessToken  = this.jwt.sign(payload, { expiresIn: process.env.JWT_ACCESS_EXPIRES  || "30m" });
-    const refreshToken = this.jwt.sign(payload, { expiresIn: process.env.JWT_REFRESH_EXPIRES || "14d" });
+    const accessToken  = this.jwt.sign(payload, { expiresIn: (process.env.JWT_ACCESS_EXPIRES || '30m') as any });
+    const refreshToken = this.jwt.sign(payload, { expiresIn: (process.env.JWT_REFRESH_EXPIRES || '14d') as any });
     return { accessToken, refreshToken, tokenType: "Bearer" };
   }
 }
