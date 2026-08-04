@@ -1,9 +1,12 @@
-import { Module } from "@nestjs/common";
-import { StakingService }    from "./staking.service";
-import { StakingController } from "./staking.controller";
+import { Module }          from "@nestjs/common";
+import { StakingService }  from "./staking.service";
+import { StakingController }from "./staking.controller";
+import { RewardEngine }    from "./engines/reward.engine";
+import { WalletModule }    from "../wallet/wallet.module";
 
 @Module({
-  providers:   [StakingService],
+  imports:     [WalletModule],
+  providers:   [StakingService, RewardEngine],
   controllers: [StakingController],
   exports:     [StakingService],
 })
