@@ -1,5 +1,11 @@
-import { Module } from "@nestjs/common";
-import { TradeGateway } from "./websocket.gateway";
+import { Module }                  from "@nestjs/common";
+import { TradeGateway }            from "./websocket.gateway";
+import { TickerBroadcastService }  from "./ticker-broadcast.service";
+import { ExchangeModule }          from "../modules/exchange/exchange.module";
 
-@Module({ providers: [TradeGateway], exports: [TradeGateway] })
+@Module({
+  imports:   [ExchangeModule],
+  providers: [TradeGateway, TickerBroadcastService],
+  exports:   [TradeGateway, TickerBroadcastService],
+})
 export class WebsocketModule {}
